@@ -40,10 +40,11 @@ void setup(struct initializers *i) {
    char             logfilename[10];
    char             sender[MAX_GROUP_NAME];
    char             groups[10][MAX_GROUP_NAME];
+   i->sequence = 0;
    sp_time test_timeout;
    struct packet_structure *p=malloc(sizeof(struct packet_structure));
    snprintf(logfilename, 10, "%d.out", i->machine_index);
-   i->written_seq = -1;
+    
    i->logfile = fopen(logfilename, "w");
    ret = SP_connect_timeout( Spread_name, User, 0, 1, &Mbox, Private_group, test_timeout );
    if( ret != ACCEPT_SESSION ) 
@@ -62,7 +63,7 @@ void setup(struct initializers *i) {
      /* Collect up the users, and send start message when everyone is in the group */
     response[1]=1;
     while (responded < 1) {
-      printf("In while..\n");
+ 
 	  ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
                 &mess_type, &endian_mismatch, sizeof(i->mess_buf), i->mess_buf );
       p = (struct packet_structure *)i->mess_buf;
@@ -76,6 +77,10 @@ void setup(struct initializers *i) {
                 if (response[c] == 0) r =0; 
                 }
           if (r==1) responded = 1;
+      }
+      else if (p->type == 3 && i->machine_index == 1)
+      {
+        i->completed[p->machine_index] = 1;
       }
     }
   /* Send start sending message to everyone */
@@ -123,6 +128,8 @@ struct packet_structure *generate_packet(struct initializers *i){
   p->received=0; /* Packet sent is set to 0, so receiving machine can update */
   p->machine_index = i->machine_index;
   p->type = 1; /*packet data type */
+  p->sequence = i->sequence;
+  i->sequence++;
   p->random_number=r;
   return p;
 }
@@ -153,6 +160,7 @@ void receive_packet(struct initializers *i) {
   else
   {
     printf("Got packet type %d, mid=%d\n", i->packet->type, i->packet->machine_index);
+    
   }
 }
 
@@ -170,12 +178,7 @@ void send_data(struct initializers *i){
        
   }
   i->packets_to_send = i->packets_to_send - sp;
-  if (i->packets_to_send == 0) /*we completed */
-  {
-    printf("Finished sending\n");
-    p->type=3;
-    ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)p );
-  }
+  
 }
 
 int parseargs(int argc, char **argv, struct initializers *i)
@@ -212,10 +215,11 @@ int main(int argc, char **argv)
   int				response[10];
   char             sender[MAX_GROUP_NAME];
   int              service_type = 0;
+  int               rts = 0;
   struct timeval    timeout, start_time, end_time;
   struct initializers *i=malloc(sizeof(struct initializers));
   struct packet_structure *p=malloc(sizeof(struct packet_structure));
-  double time1, time2;
+  double starttime1, starttime2;
   sp_time test_timeout;
   int16            mess_type;
   int              endian_mismatch=0;
@@ -223,12 +227,10 @@ int main(int argc, char **argv)
   i->debug = 0; /*Turn on for testing */
   strcpy(i->group, "shamil22");
   parseargs(argc, argv, i);
-  time1=start_time.tv_sec+(start_time.tv_usec/1000000.0); 
   i->packet_index = 0;
   setup(i); /*Setup ports and wait for start process */
-  i->max_packets = FCC;
-  gettimeofday(&start_time, NULL);
-  time1=start_time.tv_sec+(start_time.tv_usec/1000000.0);   
+  i->max_packets = 1;
+     
   printf("Begin!\n");
   send_data(i);
   while(!complete) { 
@@ -239,16 +241,31 @@ int main(int argc, char **argv)
         if (ret > 0) {
           receive_packet(i);
           if (i->packet->type == 5) complete=1;
+          if (i->packet->type == 2) {
+             gettimeofday(&start_time, NULL);
+             starttime1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
+             rts =1;
+          }
         }
     }
-    if (i->packets_to_send > 0) {
-      send_data(i);
-    }
-      
+    if (i->packets_to_send > 0 && rts) {
+      send_data(i); //printf ("%d packets left to send\n", i->packets_to_send);
+    }  
+    if (i->packets_to_send == 0) /*we completed */
+    {
+      printf("Finished sending\n");
+      p->type=3;
+      p->machine_index = i->machine_index;
+      ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)p );
+      i->packets_to_send = -1;
+    }    
   }
-  Bye();
   printf("Complete\n");
+  gettimeofday(&end_time, NULL);          
+  starttime2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
+  printf("%.6lf seconds elapsed\n", starttime2-starttime1);
   fclose(i->logfile);
+  Bye();
   return (0);
 }
 

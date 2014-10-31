@@ -11,7 +11,7 @@
 #include <errno.h>
 
 #define PORT	     10080 /* assigned address */
-#define FCC          10
+#define FCC          1
 #define PACKET_SIZE  1200
 #define MAX_MESS_LEN 1500
 #define ARRAY_SIZE   16384
@@ -30,7 +30,7 @@ struct packet_structure {
 
 struct initializers {
   /* Sequence value of the most recent packet written to log */
-  int written_seq;
+  int sequence;
   FILE *logfile;
   int packets_to_send;
   int machine_index;
