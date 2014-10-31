@@ -129,7 +129,7 @@ struct packet_structure *generate_packet(struct initializers *i){
 void receive_packet(struct initializers *i) {
   /* receiving data */
   int c, ret, num_groups;
-  int r=0;
+  int r=1;
   int16            mess_type;
   int              endian_mismatch=0;
   i->packet = (struct packet_structure *)i->mess_buf;
@@ -142,10 +142,11 @@ void receive_packet(struct initializers *i) {
     i->completed[i->packet->machine_index] = 1;
     for (c=1; c <= i->total_machines; c++) {
       if (i->completed[c] == 0) r =0; 
+      printf("%d = %d\n", c, i->completed[c]);
     }
     if (r==1) {
     /*All machines complete.  Send termination */
-      i->packet->type = 5;
+      i->packet->type = 5; printf("Complete sending termination\n");
       ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)i->packet );
     }
   }
@@ -162,7 +163,6 @@ void send_data(struct initializers *i){
   int              endian_mismatch=0;
   struct packet_structure *p=malloc(sizeof(struct packet_structure));
   if (i->packets_to_send < FCC) sp = i->packets_to_send;
-  printf("Going to send %d packets\n", sp);
   for (c=1; c <= sp; c++)
   {
      p = generate_packet(i);
@@ -231,21 +231,20 @@ int main(int argc, char **argv)
   time1=start_time.tv_sec+(start_time.tv_usec/1000000.0);   
   printf("Begin!\n");
   send_data(i);
-  while(!complete) {
-    printf("Startloop\n");
-    
-    ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
+  while(!complete) { 
+    while (SP_poll(Mbox) > 0)
+    {    
+        ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
                 &mess_type, &endian_mismatch, sizeof(i->mess_buf), i->mess_buf );
-    if (ret > 0) {
-      receive_packet(i);
-      if (i->packet->type == 5) complete=1;
+        if (ret > 0) {
+          receive_packet(i);
+          if (i->packet->type == 5) complete=1;
+        }
     }
-    else { /*Send our packets */
-      if (i->packets_to_send > 0) {
-        send_data(i);
-      }
+    if (i->packets_to_send > 0) {
+      send_data(i);
+    }
       
-    }
   }
   Bye();
   printf("Complete\n");
