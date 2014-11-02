@@ -11,7 +11,7 @@
 #include <errno.h>
 
 #define PORT	     10080 /* assigned address */
-#define FCC          1
+#define FCC          30
 #define PACKET_SIZE  1200
 #define MAX_MESS_LEN 1500
 #define ARRAY_SIZE   16384
@@ -37,7 +37,7 @@ struct initializers {
   int total_machines;
   int debug;
   int max_packets;
-  char group[80];
+  
   
   struct packet_structure *packet;
 };
