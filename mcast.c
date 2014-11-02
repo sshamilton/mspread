@@ -28,6 +28,7 @@ static  FILE *logfile;
 static  int completed [10];
 static char group[80];
 static double starttime1, starttime2;
+static int sendcount = 0;
 
 void setup(struct initializers *i) {
   /* Sets up all ports */
@@ -205,12 +206,15 @@ void receive_packet() {
     printf("Got packet type %d, mid=%d\n", packet->type, packet->machine_index);
     
   }
-  if (packets_to_send > 0) {
+  sendcount++; /* Only send when we've received at least what we've sent. */
+  if (packets_to_send > 0 && sendcount == FCC) {
+    sendcount = 0;
     sp_time delta_time;
-    delta_time.sec = 0; delta_time.usec =1200; /*Setting this below 1000 causes problems */
+    delta_time.sec = 0; delta_time.usec =2000; /*Setting this below 1000 causes problems */
     E_queue( send_data, 0, NULL, delta_time ); /*Queue up the sender */
   }
-  else if (completed[machine_index] == 0){ /*Send we are complete if we haven't already */
+  
+  if (packets_to_send == 0 && completed[machine_index] == 0){ /*Send we are complete if we haven't already */
     printf("Sending completed\n");
     completed[machine_index] = 1;
     packet->type = 3;
