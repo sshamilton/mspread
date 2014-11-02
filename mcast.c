@@ -1,4 +1,4 @@
-/* This is our implementation of the reliable multicast protocol  */
+/* Multicast tool utilizing the Spread toolkit  */
 #define MAX_MEMBERS     100
 
 #include "sp.h"
@@ -13,6 +13,7 @@ static  mailbox Mbox;
 static	int	    Num_sent;
 static	unsigned int	Previous_len;
 static  int     To_exit = 0;
+static  int     sequence = 0;
 static  void	Bye()
 {
 	To_exit = 1;
@@ -20,7 +21,11 @@ static  void	Bye()
 	SP_disconnect( Mbox );
 	exit( 0 );
 }
-
+static  int     packets_to_send;
+static  int     machine_index;
+static  int     total_machines;
+static  FILE *logfile;
+static  int completed [10];
 
 void setup(struct initializers *i) {
   /* Sets up all ports */
@@ -40,12 +45,13 @@ void setup(struct initializers *i) {
    char             logfilename[10];
    char             sender[MAX_GROUP_NAME];
    char             groups[10][MAX_GROUP_NAME];
+   char mess_buf[MAX_MESS_LEN];
    i->sequence = 0;
    sp_time test_timeout;
    struct packet_structure *p=malloc(sizeof(struct packet_structure));
-   snprintf(logfilename, 10, "%d.out", i->machine_index);
+   snprintf(logfilename, 10, "%d.out", machine_index);
     
-   i->logfile = fopen(logfilename, "w");
+   logfile = fopen(logfilename, "w");
    ret = SP_connect_timeout( Spread_name, User, 0, 1, &Mbox, Private_group, test_timeout );
    if( ret != ACCEPT_SESSION ) 
    {
@@ -55,18 +61,18 @@ void setup(struct initializers *i) {
    printf("User: connected to %s with private group %s\n", Spread_name, Private_group );
    E_init();
    ret = SP_join(Mbox, i->group);
-   if (i->machine_index == 1) {
+   if (machine_index == 1) {
     for (c=1; c <= i->total_machines; c++) {
        response[c] = 0;
-       i->completed[c] = 0;
+       completed[c] = 0;
     }
      /* Collect up the users, and send start message when everyone is in the group */
     response[1]=1;
     while (responded < 1) {
  
 	  ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
-                &mess_type, &endian_mismatch, sizeof(i->mess_buf), i->mess_buf );
-      p = (struct packet_structure *)i->mess_buf;
+                &mess_type, &endian_mismatch, sizeof(mess_buf), mess_buf );
+      p = (struct packet_structure *)mess_buf;
       if (p->type == 4) {
           printf("ret = %d Got machine id %d\n", ret, p->machine_index);
           /* Add this machine to the array and check to see if we are done */
@@ -78,9 +84,9 @@ void setup(struct initializers *i) {
                 }
           if (r==1) responded = 1;
       }
-      else if (p->type == 3 && i->machine_index == 1)
+      else if (p->type == 3 && machine_index == 1)
       {
-        i->completed[p->machine_index] = 1;
+        completed[p->machine_index] = 1;
       }
     }
   /* Send start sending message to everyone */
@@ -90,7 +96,7 @@ void setup(struct initializers *i) {
   else {
     /*Send ready to begin message */
     p->type = 4;
-    p->machine_index = i->machine_index;    
+    p->machine_index = machine_index;    
     
     ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)p );
     printf("Join=%d, group %s\n", ret, i->group);
@@ -109,75 +115,86 @@ void setup(struct initializers *i) {
 
 
 
-int write_log(struct initializers *i) {
+int write_log(struct packet_structure *packet) {
   /* writes to log for all received data */
-     fprintf(i->logfile, "%2d, %8d, %8d\n", i->packet->machine_index, 
-					    i->packet->sequence, 
-					    i->packet->random_number);
+     fprintf(logfile, "%2d, %8d, %8d\n", packet->machine_index, 
+					    packet->sequence, 
+					    packet->random_number);
 }
 
 void printpacket (struct packet_structure *p) {
   printf("Machine id: %d, Seq: %d, Rand: %di\n", p->machine_index, p->sequence, p->random_number);
 }
 
-struct packet_structure *generate_packet(struct initializers *i){
+struct packet_structure *generate_packet(){
   /* Generates the next packet, and */
   int r = rand() % 1000000 + 1;
   struct packet_structure *p=malloc(sizeof(struct packet_structure));
 
   p->received=0; /* Packet sent is set to 0, so receiving machine can update */
-  p->machine_index = i->machine_index;
+  p->machine_index = machine_index;
   p->type = 1; /*packet data type */
-  p->sequence = i->sequence;
-  i->sequence++;
+  p->sequence = sequence;
+  sequence++;
   p->random_number=r;
   return p;
 }
-void receive_packet(struct initializers *i) {
+void receive_packet() {
   /* receiving data */
+  printf("Called receive\n");
   int c, ret, num_groups;
   int r=1;
   int16            mess_type;
   int              endian_mismatch=0;
-  i->packet = (struct packet_structure *)i->mess_buf;
-  if (i->packet->type == 1) /*Data packet, write to log */
+  char mess_buf[MAX_MESS_LEN];
+  char             target_groups[MAX_MEMBERS][MAX_GROUP_NAME];
+  char             sender[MAX_GROUP_NAME];
+  int              service_type = 0;
+  char              group[80];
+  struct packet_structure *packet;
+  SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
+                &mess_type, &endian_mismatch, sizeof(mess_buf), mess_buf );
+  packet = (struct packet_structure *)mess_buf;
+  if (packet->type == 1) /*Data packet, write to log */
   {
-    write_log(i);
+    write_log(packet);
   } 
-  else if (i->packet->type == 3 && i->machine_index == 1)
+  else if (packet->type == 3 && machine_index == 1)
   {  printf("Checking for termination \n");
-    i->completed[i->packet->machine_index] = 1;
-    for (c=1; c <= i->total_machines; c++) {
-      if (i->completed[c] == 0) r =0; 
-      printf("%d = %d\n", c, i->completed[c]);
+    completed[packet->machine_index] = 1;
+    for (c=1; c <= total_machines; c++) {
+      if (completed[c] == 0) r =0; 
+      printf("%d = %d\n", c, completed[c]);
     }
     if (r==1) {
     /*All machines complete.  Send termination */
-      i->packet->type = 5; printf("Complete sending termination\n");
-      ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)i->packet );
+      packet->type = 5; printf("Complete sending termination\n");
+      ret= SP_multicast( Mbox, AGREED_MESS, group, 1, sizeof(struct packet_structure), (char *)packet );
     }
   }
   else
   {
-    printf("Got packet type %d, mid=%d\n", i->packet->type, i->packet->machine_index);
+    printf("Got packet type %d, mid=%d\n", packet->type, packet->machine_index);
     
   }
 }
 
-void send_data(struct initializers *i){
+void send_data(){
   int sp = FCC;
   int c, ret, num_groups;
-  int16            mess_type;
-  int              endian_mismatch=0;
+  int16 mess_type;
+  int endian_mismatch=0;
+  char              group[80];
   struct packet_structure *p=malloc(sizeof(struct packet_structure));
-  if (i->packets_to_send < FCC) sp = i->packets_to_send;
+  if (packets_to_send < FCC) sp = packets_to_send;
+  printf("Sending data\n");
   for (c=1; c <= sp; c++)
   {
-     p = generate_packet(i);
-     ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)p );
+     p = generate_packet();
+     ret= SP_multicast( Mbox, AGREED_MESS, group, 1, sizeof(struct packet_structure), (char *)p );
        
   }
-  i->packets_to_send = i->packets_to_send - sp;
+  packets_to_send = packets_to_send - sp;
   
 }
 
@@ -192,9 +209,9 @@ int parseargs(int argc, char **argv, struct initializers *i)
         exit(0);
     }
     else {
-        i->packets_to_send = atoi(argv[1]);
-        i->machine_index = atoi(argv[2]);
-        i->total_machines = atoi(argv[3]);
+        packets_to_send = atoi(argv[1]);
+        machine_index = atoi(argv[2]);
+        total_machines = atoi(argv[3]);
         return 1;
     }
 }
@@ -216,6 +233,8 @@ int main(int argc, char **argv)
   char             sender[MAX_GROUP_NAME];
   int              service_type = 0;
   int               rts = 0;
+  char mess_buf[MAX_MESS_LEN];
+  char              group[80];
   struct timeval    timeout, start_time, end_time;
   struct initializers *i=malloc(sizeof(struct initializers));
   struct packet_structure *p=malloc(sizeof(struct packet_structure));
@@ -231,40 +250,40 @@ int main(int argc, char **argv)
   setup(i); /*Setup ports and wait for start process */
   i->max_packets = 1;
      
-  printf("Begin!\n");
-  send_data(i);
-  while(!complete) { 
-    while (SP_poll(Mbox) > 0)
-    {    
-        ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
-                &mess_type, &endian_mismatch, sizeof(i->mess_buf), i->mess_buf );
-        if (ret > 0) {
-          receive_packet(i);
-          if (i->packet->type == 5) complete=1;
-          if (i->packet->type == 2) {
-             gettimeofday(&start_time, NULL);
-             starttime1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
-             rts =1;
-          }
-        }
+  printf("Waiting to start.\n");
+  while(!rts) { 
+    ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
+                &mess_type, &endian_mismatch, sizeof(mess_buf), mess_buf );
+    if (ret > 0) {
+      i->packet = (struct packet_structure *)mess_buf; 
+      if (i->packet->type == 2) {
+         rts =1;
+      }
     }
-    if (i->packets_to_send > 0 && rts) {
-      send_data(i); //printf ("%d packets left to send\n", i->packets_to_send);
-    }  
-    if (i->packets_to_send == 0) /*we completed */
-    {
-      printf("Finished sending\n");
-      p->type=3;
-      p->machine_index = i->machine_index;
-      ret= SP_multicast( Mbox, AGREED_MESS, i->group, 1, sizeof(struct packet_structure), (char *)p );
-      i->packets_to_send = -1;
-    }    
   }
+  printf("Begin!\n");
+  gettimeofday(&start_time, NULL);          
+  starttime1=start_time.tv_sec+(start_time.tv_usec/1000000.0);
+  E_attach_fd( Mbox, READ_FD, send_data, 0, NULL, HIGH_PRIORITY );
+  E_attach_fd( Mbox, READ_FD, receive_packet, 0, NULL, HIGH_PRIORITY );
+  printf("Handling events.\n");
+  E_handle_events();
+
+
+  if (i->packets_to_send == 0) /*we completed */
+  {
+    printf("Finished sending\n");
+    p->type=3;
+    p->machine_index = machine_index;
+    ret= SP_multicast( Mbox, AGREED_MESS, group, 1, sizeof(struct packet_structure), (char *)p );
+    i->packets_to_send = -1;
+  }    
+  
   printf("Complete\n");
   gettimeofday(&end_time, NULL);          
   starttime2=end_time.tv_sec+(end_time.tv_usec/1000000.0);
   printf("%.6lf seconds elapsed\n", starttime2-starttime1);
-  fclose(i->logfile);
+  fclose(logfile);
   Bye();
   return (0);
 }
