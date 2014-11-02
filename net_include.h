@@ -11,7 +11,7 @@
 #include <errno.h>
 
 #define PORT	     10080 /* assigned address */
-#define FCC          30
+#define FCC          80
 #define PACKET_SIZE  1200
 #define MAX_MESS_LEN 1500
 #define ARRAY_SIZE   16384

@@ -207,7 +207,7 @@ void receive_packet() {
   }
   if (packets_to_send > 0) {
     sp_time delta_time;
-    delta_time.sec = 0; delta_time.usec =1000;
+    delta_time.sec = 0; delta_time.usec =1200; /*Setting this below 1000 causes problems */
     E_queue( send_data, 0, NULL, delta_time ); /*Queue up the sender */
   }
   else if (completed[machine_index] == 0){ /*Send we are complete if we haven't already */
