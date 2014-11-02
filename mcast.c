@@ -48,7 +48,6 @@ void setup(struct initializers *i) {
    char             sender[MAX_GROUP_NAME];
    char             groups[10][MAX_GROUP_NAME];
    char mess_buf[MAX_MESS_LEN];
-   i->sequence = 0;
    sp_time test_timeout;
    struct packet_structure *p=malloc(sizeof(struct packet_structure));
    snprintf(logfilename, 10, "%d.out", machine_index);
@@ -71,7 +70,6 @@ void setup(struct initializers *i) {
      /* Collect up the users, and send start message when everyone is in the group */
     response[1]=1;
     while (responded < 1) {
-      printf("1rec\n");
 	  ret = SP_receive( Mbox, &service_type, sender, 100, &num_groups, target_groups, 
                 &mess_type, &endian_mismatch, sizeof(mess_buf), mess_buf );
       p = (struct packet_structure *)mess_buf;
@@ -79,23 +77,25 @@ void setup(struct initializers *i) {
           printf("ret = %d Got machine id %d\n", ret, p->machine_index);
           /* Add this machine to the array and check to see if we are done */
           response[p->machine_index] = 1; 
-          //if (i->debug) printf("Got response from %d\n", p->machine_index);
+          printf("Got response from %d\n", p->machine_index);
           r = 1;
-          for (c=1; c <= i->total_machines; c++) {
+          for (c=1; c <= total_machines; c++) {
                 if (response[c] == 0) r =0; 
                 }
           if (r==1) responded = 1;
-      }
+          }
       else if (p->type == 3 && machine_index == 1)
       {
         completed[p->machine_index] = 1;
       }
+      }
+      /* Send start sending message to everyone */
+      if (r=1) /*All ready */ {
+        p->type=  2; printf("Ready to go..\n");
+        ret= SP_multicast( Mbox, AGREED_MESS, group, 1, sizeof(struct packet_structure), (char *)p );
+      }
     }
-  /* Send start sending message to everyone */
-    p->type=  2;
-    ret= SP_multicast( Mbox, AGREED_MESS, group, 1, sizeof(struct packet_structure), (char *)p );
-  }
-  else {
+    else { /*We are not machine index 1*/
     /*Send ready to begin message */
     p->type = 4;
     p->machine_index = machine_index;    

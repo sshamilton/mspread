@@ -30,14 +30,8 @@ struct packet_structure {
 
 struct initializers {
   /* Sequence value of the most recent packet written to log */
-  int sequence;
   int packets_to_send;
-
   int packet_index;
-  int total_machines;
   int debug;
-  int max_packets;
-  
-  
   struct packet_structure *packet;
 };
