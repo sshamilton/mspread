@@ -1,0 +1,38 @@
+\documentclass[11pt]{article}
+
+\usepackage{enumitem}
+\usepackage{graphicx}
+
+\usepackage{newcent} % Default font is the New Century Schoolbook PostScript font 
+%\usepackage{helvet} % Uncomment this (while commenting the above line) to use the Helvetica font
+
+\title{EN 600.437\\Practical Exercise 3\\Performance Results}
+\author{David Gong, Stephen Hamilton}
+\date{Monday, Nov. 4, 2014}
+
+% Margins
+\topmargin=-1in % Moves the top of the document 1 inch above the default
+\textheight=8.5in % Total height of the text on the page before text goes on to the next page, this can be increased in a longer letter
+\oddsidemargin=-10pt % Position of the left margin, can be negative or positive if you want more or less room
+\textwidth=6.5in % Total width of the text, increase this if the left margin was decreased and vice-versa
+
+\def\wl{\par\vspace{\baselineskip}\noindent}
+
+\begin{document}
+\maketitle
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|r|r|}\hline
+Trial & Time (s)\\\hline
+1 & 16.675\\\hline
+2 & 16.887\\\hline
+3 & 15.544\\\hline
+4 & 16.848\\\hline
+5 & 15.339\\\hline
+Average & 16.2586\\\hline
+\end{tabular}
+\caption{Exercise 3 Performance Results}
+\end{center}
+\end{table}
+Each trial consists of sending a total of 600,000 packets amongst a group of 8 machines. 6 of the machines are sending 100,000 packets each and the other 2 are listening. From our results, our protocol sends at an average rate of 337.86 Mib/s but this value seems to fluctuate with server load. At the time of testing we did not get entirely consistant results as seen from trials 3 and 5 being a good amount faster than the other three trials. This performance in comparison to the performance of our protocol from the second practical exercise is pretty undesirable. Of course there must be room for improvement by properly tweaking flow control.
+\end{document}
