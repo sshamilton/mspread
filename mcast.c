@@ -204,13 +204,15 @@ void receive_packet() {
   else
   {
     printf("Got packet type %d, mid=%d\n", packet->type, packet->machine_index);
+    printf("received message of unknown message type 0x%x with ret %d\n", service_type, ret);
+
     
   }
   sendcount++; /* Only send when we've received at least what we've sent. */
   if (packets_to_send > 0 && sendcount == FCC) {
     sendcount = 0;
     sp_time delta_time;
-    delta_time.sec = 0; delta_time.usec =2000; /*Setting this below 1000 causes problems */
+    delta_time.sec = 0; delta_time.usec =1250; /*Setting this below 1000 causes problems */
     E_queue( send_data, 0, NULL, delta_time ); /*Queue up the sender */
   }
   

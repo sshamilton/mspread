@@ -11,11 +11,11 @@
 #include <errno.h>
 
 #define PORT	     10080 /* assigned address */
-#define FCC          80
+#define FCC          50
 #define PACKET_SIZE  1200
 #define MAX_MESS_LEN 1500
 #define ARRAY_SIZE   16384
-#define MAX_RTR      250
+
 
 /* Initializer variables */
 struct packet_structure {
